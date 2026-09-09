@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trivia Timeline</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --bg-2: #ffffff;
+      --card: rgba(255, 255, 255, .94);
+      --card-strong: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: rgba(17, 24, 39, .09);
+      --accent: #6d5dfc;
+      --accent-2: #0ea5e9;
+      --accent-soft: rgba(109, 93, 252, .10);
+      --danger: #e11d48;
+      --shadow: 0 20px 60px rgba(17, 24, 39, .10);
+      --page-bg:
+        radial-gradient(circle at 15% 0%, rgba(109,93,252,.08), transparent 28%),
+        radial-gradient(circle at 90% 10%, rgba(14,165,233,.06), transparent 24%),
+        linear-gradient(180deg, #fbfcfe 0%, #f4f6fa 100%);
+      --app-bg: rgba(255,255,255,.78);
+      --topbar-bg: rgba(255,255,255,.84);
+      --card-bg: linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,251,253,.96));
+      --card-hover-bg: linear-gradient(180deg, #ffffff, #f8faff);
+      --summary: #374151;
+      --tab-text: #5f6877;
+      --soft-bg: rgba(17,24,39,.045);
+      --modal-overlay: rgba(17,24,39,.42);
+      --modal-bg: linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,250,252,.99));
+      --detail-text: #344054;
+      --detail-summary: #1f2937;
+      --accent-label: #6556de;
+      --title-gradient: linear-gradient(90deg, #111827, #5b4fe0 55%, #0284c7);
+      --modal-title-gradient: linear-gradient(90deg, #111827, #5b4fe0);
+      --wiki-badge-bg: rgba(17,24,39,.055);
+      --wiki-badge-text: #111827;
+      --menu-shadow: 0 18px 60px rgba(17,24,39,.16);
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0b1020;
+      --bg-2: #11182b;
+      --card: rgba(17, 24, 39, .72);
+      --card-strong: rgba(22, 30, 48, .92);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --line: rgba(148, 163, 184, .14);
+      --accent: #7c3aed;
+      --accent-2: #22d3ee;
+      --accent-soft: rgba(124, 58, 237, .14);
+      --danger: #fb7185;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .28);
+      --page-bg:
+        radial-gradient(circle at 15% 0%, rgba(124,58,237,.18), transparent 28%),
+        radial-gradient(circle at 90% 10%, rgba(34,211,238,.12), transparent 24%),
+        linear-gradient(180deg, #0b1020 0%, #090d18 100%);
+      --app-bg: rgba(7, 12, 24, .56);
+      --topbar-bg: rgba(8, 13, 26, .74);
+      --card-bg: linear-gradient(180deg, rgba(18,25,43,.76), rgba(13,19,33,.72));
+      --card-hover-bg: linear-gradient(180deg, rgba(24,33,55,.9), rgba(15,22,38,.86));
+      --summary: #cbd5e1;
+      --tab-text: #cbd5e1;
+      --soft-bg: rgba(148,163,184,.10);
+      --modal-overlay: rgba(2, 6, 23, .72);
+      --modal-bg: linear-gradient(180deg, rgba(18,25,43,.98), rgba(8,13,26,.98));
+      --detail-text: #dbe4ef;
+      --detail-summary: #e2e8f0;
+      --accent-label: #c4b5fd;
+      --title-gradient: linear-gradient(90deg, #fff, #c4b5fd 45%, #67e8f9);
+      --modal-title-gradient: linear-gradient(90deg, #fff, #c4b5fd);
+      --wiki-badge-bg: rgba(255,255,255,.08);
+      --wiki-badge-text: #fff;
+      --menu-shadow: 0 18px 60px rgba(0,0,0,.34);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--text);
+      font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+        "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .app {
+      width: min(760px, 100%);
+      margin: 0 auto;
+      min-height: 100vh;
+      background: var(--app-bg);
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      box-shadow: 0 0 80px rgba(0,0,0,.18);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--topbar-bg);
+      backdrop-filter: blur(22px) saturate(140%);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px 12px;
+    }
+
+    .topbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -.03em;
+      font-weight: 850;
+      background: var(--title-gradient);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tab {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 13px;
+      background: var(--soft-bg);
+      color: var(--tab-text);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, var(--accent), #5b21b6);
+      color: white;
+      box-shadow: 0 8px 24px rgba(124,58,237,.28);
+    }
+
+    .timeline {
+      min-height: 240px;
+    }
+
+    .card {
+      position: relative;
+      padding: 17px 18px 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--card-bg);
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      cursor: pointer;
+      margin: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 12px 35px rgba(0,0,0,.16);
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      background: var(--card-hover-bg);
+      border-color: rgba(124,58,237,.35);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .word {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.35;
+      font-weight: 800;
+      letter-spacing: -.01em;
+      overflow-wrap: anywhere;
+    }
+
+    .summary {
+      margin: 8px 0 0;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--summary);
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .meta {
+      margin-top: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .wiki-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .fav-btn {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--soft-bg);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      color: #64748b;
+      font-size: 19px;
+      transition: .15s ease;
+    }
+
+    .fav-btn:hover {
+      background: rgba(251,113,133,.10);
+      border-color: #ffd0e4;
+      color: var(--danger);
+    }
+
+    .fav-btn.active {
+      color: var(--danger);
+      border-color: #ffd0e4;
+      background: rgba(251,113,133,.10);
+    }
+
+    .load-more-wrap {
+      padding: 18px;
+      background: transparent;
+    }
+
+    .load-more {
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5 52%, #0891b2);
+      color: white;
+      font-weight: 800;
+      box-shadow: 0 14px 35px rgba(79,70,229,.26);
+      cursor: pointer;
+    }
+
+    .load-more:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .status {
+      padding: 34px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .spinner {
+      width: 26px;
+      height: 26px;
+      margin: 0 auto 12px;
+      border: 3px solid #dbe7ef;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: var(--modal-overlay);
+      backdrop-filter: blur(10px);
+    }
+
+    .modal.show { display: flex; }
+
+    .modal-panel {
+      width: min(680px, 100%);
+      max-height: min(82vh, 820px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--modal-bg);
+      border: 1px solid rgba(148,163,184,.18);
+      border-radius: 24px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.22);
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 23px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .close-btn {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--soft-bg);
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      padding: 18px 20px 24px;
+    }
+
+    .detail-text {
+      margin: 0;
+      white-space: pre-wrap;
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--detail-text);
+    }
+
+
+    .detail-block {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .detail-block:first-child { padding-top: 0; }
+
+    .detail-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 5px 9px;
+      margin-bottom: 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-label);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+
+    .detail-summary {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.75;
+      font-weight: 650;
+      color: var(--detail-summary);
+    }
+
+    .detail-loading {
+      margin-top: 14px;
+      padding: 11px 13px;
+      border-radius: 12px;
+      background: var(--soft-bg);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .modal-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .action {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 800;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .action.primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .action.secondary {
+      background: var(--soft-bg);
+      color: var(--detail-summary);
+    }
+
+    .empty-note {
+      padding: 48px 22px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+
+    .topbar::after {
+      content: "";
+      position: absolute;
+      left: 18px; right: 18px; bottom: -1px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,58,237,.7), rgba(34,211,238,.55), transparent);
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      border-radius: 20px 0 0 20px;
+      background: linear-gradient(180deg, #8b5cf6, #22d3ee);
+      opacity: .75;
+    }
+
+    .wiki-label::before {
+      content: "W";
+      width: 20px; height: 20px;
+      border-radius: 7px;
+      display: inline-grid;
+      place-items: center;
+      font-family: Georgia, serif;
+      font-weight: 700;
+      color: var(--wiki-badge-text);
+      background: var(--wiki-badge-bg);
+      border: 1px solid var(--line);
+    }
+
+    .load-more {
+      transition: transform .18s ease, filter .18s ease;
+    }
+
+    .load-more:hover { transform: translateY(-1px); filter: brightness(1.06); }
+
+    .modal-title {
+      background: var(--modal-title-gradient);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .menu-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .menu-button {
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--soft-bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform .16s ease, background .16s ease;
+    }
+
+    .menu-button:hover { transform: translateY(-1px); }
+
+    .hamburger {
+      width: 18px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .hamburger span {
+      display: block;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .menu-panel {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 230px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card-strong);
+      box-shadow: var(--menu-shadow);
+      opacity: 0;
+      transform: translateY(-6px) scale(.98);
+      pointer-events: none;
+      transition: opacity .16s ease, transform .16s ease;
+    }
+
+    .menu-panel.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .menu-title {
+      padding: 6px 8px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+
+    .theme-option {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 0;
+      border-radius: 13px;
+      padding: 11px 12px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .theme-option:hover { background: var(--soft-bg); }
+
+    .theme-option.active {
+      background: var(--accent-soft);
+      color: var(--accent-label);
+    }
+
+    .theme-option .check {
+      opacity: 0;
+      font-weight: 900;
+    }
+
+    .theme-option.active .check { opacity: 1; }
+
+    @media (max-width: 640px) {
+      .app { border: 0; }
+      .topbar { padding-inline: 15px; }
+      .card { padding-inline: 15px; }
+      .word { font-size: 18px; }
+      .summary { font-size: 14px; }
+      .modal { padding: 0; align-items: flex-end; }
+      .modal-panel {
+        width: 100%;
+        max-height: 88vh;
+        border-radius: 22px 22px 0 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="topbar-row">
+        <div>
+          <h1>Trivia Timeline</h1>
+          <p class="subtitle">Wikipediaから、知らない言葉に出会う。</p>
+        </div>
+        <div class="menu-wrap">
+          <button id="menuButton" class="menu-button" type="button" aria-label="メニューを開く" aria-expanded="false">
+            <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
+          </button>
+          <div id="menuPanel" class="menu-panel" aria-hidden="true">
+            <div class="menu-title">表示テーマ</div>
+            <button class="theme-option" type="button" data-theme-option="light">
+              <span>☀️ ライト</span><span class="check">✓</span>
+            </button>
+            <button class="theme-option" type="button" data-theme-option="dark">
+              <span>🌙 ダーク</span><span class="check">✓</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs" aria-label="表示切り替え">
+        <button class="tab active" data-tab="timeline">タイムライン</button>
+        <button class="tab" data-tab="favorites">お気に入り</button>
+      </div>
+    </header>
+
+    <section id="timeline" class="timeline" aria-live="polite"></section>
+
+    <div id="loadMoreWrap" class="load-more-wrap">
+      <button id="loadMoreBtn" class="load-more">さらに20件読み込む</button>
+    </div>
+  </main>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 id="modalTitle" class="modal-title"></h2>
+        <button id="closeModalBtn" class="close-btn" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <section class="detail-block detail-overview">
+          <div class="detail-label">概要</div>
+          <p id="modalSummary" class="detail-summary"></p>
+        </section>
+        <section class="detail-block">
+          <div class="detail-label">もう少し詳しく</div>
+          <p id="modalText" class="detail-text"></p>
+          <div id="detailLoading" class="detail-loading" hidden>Wikipedia本文を読み込み中…</div>
+        </section>
+        <div class="modal-actions">
+          <a id="wikiLink" class="action primary" target="_blank" rel="noopener noreferrer">
+            Wikipediaで開く
+          </a>
+          <button id="modalFavBtn" class="action secondary">☆ お気に入りに保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PAGE_SIZE = 20;
+    const API = "https://ja.wikipedia.org/w/api.php";
+    const timelineEl = document.getElementById("timeline");
+    const loadMoreBtn = document.getElementById("loadMoreBtn");
+    const loadMoreWrap = document.getElementById("loadMoreWrap");
+    const tabs = [...document.querySelectorAll(".tab")];
+    const menuButton = document.getElementById("menuButton");
+    const menuPanel = document.getElementById("menuPanel");
+    const themeOptions = [...document.querySelectorAll("[data-theme-option]")];
+
+    const modal = document.getElementById("modal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalSummary = document.getElementById("modalSummary");
+    const modalText = document.getElementById("modalText");
+    const detailLoading = document.getElementById("detailLoading");
+    const wikiLink = document.getElementById("wikiLink");
+    const modalFavBtn = document.getElementById("modalFavBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+
+    let items = [];
+    let currentTab = "timeline";
+    let activeItem = null;
+    let loading = false;
+
+    function applyTheme(theme) {
+      const safeTheme = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = safeTheme;
+      localStorage.setItem("trivia-theme", safeTheme);
+      themeOptions.forEach(option => {
+        option.classList.toggle("active", option.dataset.themeOption === safeTheme);
+      });
+    }
+
+    function closeMenu() {
+      menuPanel.classList.remove("show");
+      menuPanel.setAttribute("aria-hidden", "true");
+      menuButton.setAttribute("aria-expanded", "false");
+    }
+
+    menuButton.addEventListener("click", event => {
+      event.stopPropagation();
+      const willOpen = !menuPanel.classList.contains("show");
+      menuPanel.classList.toggle("show", willOpen);
+      menuPanel.setAttribute("aria-hidden", String(!willOpen));
+      menuButton.setAttribute("aria-expanded", String(willOpen));
+    });
+
+    themeOptions.forEach(option => {
+      option.addEventListener("click", () => {
+        applyTheme(option.dataset.themeOption);
+        closeMenu();
+      });
+    });
+
+    document.addEventListener("click", event => {
+      if (!event.target.closest(".menu-wrap")) closeMenu();
+    });
+
+    applyTheme(localStorage.getItem("trivia-theme") || "light");
+
+    function getFavorites() {
+      try {
+        return JSON.parse(localStorage.getItem("trivia-favorites") || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function saveFavorites(list) {
+      localStorage.setItem("trivia-favorites", JSON.stringify(list));
+    }
+
+    function isFavorite(item) {
+      return getFavorites().some(x => x.pageid === item.pageid);
+    }
+
+    function toggleFavorite(item) {
+      const favorites = getFavorites();
+      const index = favorites.findIndex(x => x.pageid === item.pageid);
+
+      if (index >= 0) {
+        favorites.splice(index, 1);
+      } else {
+        favorites.unshift(item);
+      }
+
+      saveFavorites(favorites);
+      render();
+      if (activeItem && activeItem.pageid === item.pageid) {
+        updateModalFavoriteButton();
+      }
+    }
+
+    function cleanText(text = "") {
+      return text
+        .replace(/\s+/g, " ")
+        .replace(/\[\d+\]/g, "")
+        .trim();
+    }
+
+    // AIは使わず、Wikidataの短い「description」をカード用要約として使う。
+    // description が取れない場合だけ、Wikipedia本文から定義らしい最初の一文を整形する。
+    function makeDefinitionSummary(title = "", description = "", extract = "") {
+      const desc = cleanText(description)
+        .replace(/^ウィキメディアの一覧記事$/, "")
+        .replace(/^ウィキメディアの曖昧さ回避ページ$/, "")
+        .replace(/^ウィキメディアのカテゴリ$/, "")
+        .trim();
+
+      if (desc) {
+        const normalized = desc.replace(/[。.!！?？]+$/g, "");
+        return normalized.length > 54 ? normalized.slice(0, 54).replace(/[、,\s]+$/g, "") + "…" : normalized;
+      }
+
+      const text = cleanText(extract);
+      if (!text) return "概要を取得できませんでした";
+
+      const firstSentence = text.split(/(?<=[。！？])/)[0] || text;
+      let summary = firstSentence
+        .replace(new RegExp("^" + title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[（(][^）)]*[）)](?:とは|は|、)?"), "")
+        .replace(new RegExp("^" + title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:とは|は|、)"), "")
+        .replace(/^[、,:：\s]+/, "")
+        .replace(/[。.!！?？]+$/g, "")
+        .trim();
+
+      if (!summary) summary = firstSentence.replace(/[。.!！?？]+$/g, "");
+      return summary.length > 54 ? summary.slice(0, 54).replace(/[、,\s]+$/g, "") + "…" : summary;
+    }
+
+    function makeDetail(extract = "") {
+      const text = cleanText(extract);
+      if (!text) return "本文を取得できませんでした。";
+      return text.length > 1800 ? text.slice(0, 1800) + "…" : text;
+    }
+
+    async function fetchRandomArticles(count = PAGE_SIZE) {
+      const params = new URLSearchParams({
+        origin: "*",
+        action: "query",
+        format: "json",
+        generator: "random",
+        grnnamespace: "0",
+        grnlimit: String(count),
+        prop: "extracts|info|pageprops",
+        exintro: "1",
+        explaintext: "1",
+        inprop: "url"
+      });
+
+      const response = await fetch(`${API}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Wikipedia APIへの接続に失敗しました。");
+      }
+
+      const data = await response.json();
+      const pages = data?.query?.pages ? Object.values(data.query.pages) : [];
+
+      const usablePages = pages.filter(page => page.title && page.extract);
+      const qids = usablePages
+        .map(page => page.pageprops?.wikibase_item)
+        .filter(Boolean);
+
+      const descriptions = {};
+
+      if (qids.length) {
+        try {
+          const wdParams = new URLSearchParams({
+            origin: "*",
+            action: "wbgetentities",
+            format: "json",
+            ids: qids.join("|"),
+            props: "descriptions",
+            languages: "ja|en",
+            languagefallback: "1"
+          });
+
+          const wdResponse = await fetch(`https://www.wikidata.org/w/api.php?${wdParams.toString()}`);
+          if (wdResponse.ok) {
+            const wdData = await wdResponse.json();
+            Object.entries(wdData.entities || {}).forEach(([qid, entity]) => {
+              descriptions[qid] =
+                entity.descriptions?.ja?.value ||
+                entity.descriptions?.en?.value ||
+                "";
+            });
+          }
+        } catch (error) {
+          console.warn("Wikidataの短い説明を取得できませんでした。", error);
+        }
+      }
+
+      return usablePages.map(page => {
+        const qid = page.pageprops?.wikibase_item;
+        return {
+          pageid: page.pageid,
+          title: page.title,
+          extract: page.extract,
+          summary: makeDefinitionSummary(page.title, descriptions[qid] || "", page.extract),
+          detail: makeDetail(page.extract),
+          url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
+        };
+      });
+    }
+
+    async function fetchFullArticle(item) {
+      const params = new URLSearchParams({
+        origin: "*",
+        action: "query",
+        format: "json",
+        pageids: String(item.pageid),
+        prop: "extracts|info",
+        explaintext: "1",
+        exsectionformat: "plain",
+        inprop: "url"
+      });
+
+      const response = await fetch(`${API}?${params.toString()}`);
+      if (!response.ok) throw new Error("Wikipedia本文の取得に失敗しました。");
+
+      const data = await response.json();
+      const page = data?.query?.pages?.[item.pageid];
+      const fullText = cleanText(page?.extract || "");
+      if (!fullText) return item.detail;
+
+      // AI要約は使わず、Wikipedia本文をそのまま読みやすい長さに制限する。
+      return fullText.length > 4200 ? fullText.slice(0, 4200) + "…" : fullText;
+    }
+
+    function createCard(item) {
+      const article = document.createElement("article");
+      article.className = "card";
+      article.tabIndex = 0;
+      article.setAttribute("role", "button");
+      article.setAttribute("aria-label", `${item.title}の詳細を見る`);
+
+      const head = document.createElement("div");
+      head.className = "card-head";
+
+      const content = document.createElement("div");
+      content.style.minWidth = "0";
+
+      const title = document.createElement("h2");
+      title.className = "word";
+      title.textContent = item.title;
+
+      const summary = document.createElement("p");
+      summary.className = "summary";
+      summary.textContent = item.summary || "概要を取得できませんでした。";
+
+      content.append(title, summary);
+
+      const fav = document.createElement("button");
+      fav.className = "fav-btn" + (isFavorite(item) ? " active" : "");
+      fav.type = "button";
+      fav.title = isFavorite(item) ? "お気に入りから外す" : "お気に入りに保存";
+      fav.textContent = isFavorite(item) ? "♥" : "♡";
+      fav.addEventListener("click", event => {
+        event.stopPropagation();
+        toggleFavorite(item);
+      });
+
+      head.append(content, fav);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const source = document.createElement("span");
+      source.className = "wiki-label";
+      source.textContent = "Wikipedia";
+
+      const more = document.createElement("span");
+      more.textContent = "概要・詳しい解説を見る →";
+
+      meta.append(source, more);
+      article.append(head, meta);
+
+      article.addEventListener("click", () => openModal(item));
+      article.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openModal(item);
+        }
+      });
+
+      return article;
+    }
+
+    function render() {
+      timelineEl.innerHTML = "";
+
+      const data = currentTab === "timeline" ? items : getFavorites();
+
+      if (data.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-note";
+        empty.textContent = currentTab === "favorites"
+          ? "まだお気に入りはありません。カードの♡ボタンから保存できます。"
+          : "トリビアを読み込んでいます。";
+        timelineEl.appendChild(empty);
+      } else {
+        data.forEach(item => timelineEl.appendChild(createCard(item)));
+      }
+
+      loadMoreWrap.style.display = currentTab === "timeline" ? "block" : "none";
+    }
+
+    function showLoading() {
+      timelineEl.innerHTML = `
+        <div class="status">
+          <div class="spinner"></div>
+          Wikipediaからトリビアを取得中…
+        </div>
+      `;
+    }
+
+    function showError(message) {
+      timelineEl.innerHTML = `
+        <div class="status">
+          ${message}<br><br>
+          「さらに20件読み込む」から再試行できます。
+        </div>
+      `;
+    }
+
+    async function loadMore(initial = false) {
+      if (loading) return;
+      loading = true;
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = "読み込み中…";
+
+      if (initial && items.length === 0) showLoading();
+
+      try {
+        let batch = [];
+        let attempts = 0;
+
+        // 短すぎる記事が混ざる場合に備え、必要数まで追加取得する。
+        while (batch.length < PAGE_SIZE && attempts < 4) {
+          const fetched = await fetchRandomArticles(PAGE_SIZE);
+          const existingIds = new Set([...items, ...batch].map(x => x.pageid));
+
+          batch.push(
+            ...fetched.filter(item =>
+              item.summary.length >= 18 &&
+              !existingIds.has(item.pageid)
+            )
+          );
+
+          attempts++;
+        }
+
+        items.push(...batch.slice(0, PAGE_SIZE));
+        render();
+      } catch (error) {
+        console.error(error);
+        if (items.length === 0) {
+          showError("データの取得に失敗しました。通信環境を確認してください。");
+        }
+      } finally {
+        loading = false;
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = "さらに20件読み込む";
+      }
+    }
+
+    async function openModal(item) {
+      activeItem = item;
+      modalTitle.textContent = item.title;
+      modalSummary.textContent = item.summary || "概要を取得できませんでした。";
+      modalText.textContent = item.detail || "本文を読み込んでいます。";
+      detailLoading.hidden = false;
+      wikiLink.href = item.url;
+      updateModalFavoriteButton();
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+
+      try {
+        const detail = await fetchFullArticle(item);
+        if (activeItem?.pageid === item.pageid) {
+          modalText.textContent = detail;
+        }
+      } catch (error) {
+        console.error(error);
+        if (activeItem?.pageid === item.pageid) {
+          modalText.textContent = item.detail || "詳しい本文を取得できませんでした。";
+        }
+      } finally {
+        if (activeItem?.pageid === item.pageid) {
+          detailLoading.hidden = true;
+        }
+      }
+    }
+
+    function closeModal() {
+      modal.classList.remove("show");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      activeItem = null;
+    }
+
+    function updateModalFavoriteButton() {
+      if (!activeItem) return;
+      const saved = isFavorite(activeItem);
+      modalFavBtn.textContent = saved
+        ? "♥ お気に入りから外す"
+        : "☆ お気に入りに保存";
+    }
+
+    modalFavBtn.addEventListener("click", () => {
+      if (activeItem) toggleFavorite(activeItem);
+    });
+
+    closeModalBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", event => {
+      if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && modal.classList.contains("show")) {
+        closeModal();
+      }
+    });
+
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        currentTab = tab.dataset.tab;
+        tabs.forEach(t => t.classList.toggle("active", t === tab));
+        render();
+      });
+    });
+
+    loadMoreBtn.addEventListener("click", () => loadMore(false));
+
+    loadMore(true);
+  </script>
+</body>
+</html>
