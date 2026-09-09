@@ -744,33 +744,73 @@
         .trim();
     }
 
-    // AIは使わず、Wikidataの短い「description」をカード用要約として使う。
-    // description が取れない場合だけ、Wikipedia本文から定義らしい最初の一文を整形する。
+    // AIは使わず、日本語Wikipediaが返す「ページ説明」を最優先で使う。
+    // ページ説明が無い場合のみ、Wikipedia本文の定義文をルールベースで短く整形する。
     function makeDefinitionSummary(title = "", description = "", extract = "") {
-      const desc = cleanText(description)
-        .replace(/^ウィキメディアの一覧記事$/, "")
-        .replace(/^ウィキメディアの曖昧さ回避ページ$/, "")
-        .replace(/^ウィキメディアのカテゴリ$/, "")
+      const hasJapanese = text => /[ぁ-んァ-ヶ一-龯々ー]/.test(text || "");
+      const normalize = text => cleanText(text)
+        .replace(/^ウィキメディアの一覧記事$/g, "")
+        .replace(/^ウィキメディアの曖昧さ回避ページ$/g, "")
+        .replace(/^ウィキメディアのカテゴリ$/g, "")
+        .replace(/\s*[。.!！?？]+$/g, "")
         .trim();
 
-      if (desc) {
-        const normalized = desc.replace(/[。.!！?？]+$/g, "");
-        return normalized.length > 54 ? normalized.slice(0, 54).replace(/[、,\s]+$/g, "") + "…" : normalized;
+      // Wikipediaの短い説明は「日本の俳優」「物理学の概念」のような
+      // 要約用データなので、日本語ならそのまま自然な一文にする。
+      const desc = normalize(description);
+      if (desc && hasJapanese(desc)) {
+        return (desc.length > 58
+          ? desc.slice(0, 58).replace(/[、,・\s]+$/g, "") + "…"
+          : desc) + (desc.length <= 58 ? "。" : "");
       }
 
       const text = cleanText(extract);
-      if (!text) return "概要を取得できませんでした";
+      if (!text) return "日本語の概要を取得できませんでした。";
 
-      const firstSentence = text.split(/(?<=[。！？])/)[0] || text;
-      let summary = firstSentence
-        .replace(new RegExp("^" + title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[（(][^）)]*[）)](?:とは|は|、)?"), "")
-        .replace(new RegExp("^" + title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:とは|は|、)"), "")
-        .replace(/^[、,:：\s]+/, "")
-        .replace(/[。.!！?？]+$/g, "")
+      // 冒頭から最大3文を候補にし、「〜である」「〜を指す」など
+      // 定義として成立しやすい一文を選ぶ。
+      const sentences = text
+        .split(/(?<=[。！？])/)
+        .map(s => cleanText(s))
+        .filter(Boolean)
+        .slice(0, 3);
+
+      const definitionPatterns = [
+        /(?:である|であった|を指す|のこと|と呼ばれる|とされる|に属する|に位置する|を意味する|を表す|をいう)[。！？]?$/,
+        /(?:人物|作品|概念|現象|制度|組織|団体|企業|会社|都市|地域|国|島|山|川|湖|駅|路線|建築物|施設|楽曲|映画|小説|漫画|アニメ|ゲーム|植物|動物|生物|物質|元素|技術|手法|用語|名称)[。！？]?$/
+      ];
+
+      let sentence = sentences.find(s => definitionPatterns.some(re => re.test(s))) || sentences[0] || text;
+
+      // 長い読み仮名・原語・生没年などの括弧書きを短文化時だけ省く。
+      sentence = sentence
+        .replace(/（[^）]{18,}）/g, "")
+        .replace(/\([^)]{18,}\)/g, "")
+        .replace(/\s+/g, " ")
         .trim();
 
-      if (!summary) summary = firstSentence.replace(/[。.!！?？]+$/g, "");
-      return summary.length > 54 ? summary.slice(0, 54).replace(/[、,\s]+$/g, "") + "…" : summary;
+      // 「タイトルとは〜」「タイトルは〜」の形は主語を除き、
+      // カードタイトルと重複しない説明文にする。
+      const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      sentence = sentence
+        .replace(new RegExp("^" + escapedTitle + "[（(][^）)]*[）)](?:とは|は|、)?"), "")
+        .replace(new RegExp("^" + escapedTitle + "(?:とは|は|、)"), "")
+        .replace(/^[、,:：\s]+/, "")
+        .trim();
+
+      if (!sentence) sentence = sentences[0] || text;
+
+      // タイムラインでは短く、ただし単なる途中切れに見えないようにする。
+      if (sentence.length > 64) {
+        const cut = sentence.slice(0, 64);
+        const naturalBreak = Math.max(cut.lastIndexOf("、"), cut.lastIndexOf("。"));
+        sentence = naturalBreak >= 30 ? cut.slice(0, naturalBreak) : cut;
+        sentence = sentence.replace(/[、,。\s]+$/g, "") + "…。";
+      } else if (!/[。！？]$/.test(sentence)) {
+        sentence += "。";
+      }
+
+      return sentence;
     }
 
     function makeDetail(extract = "") {
@@ -787,7 +827,7 @@
         generator: "random",
         grnnamespace: "0",
         grnlimit: String(count),
-        prop: "extracts|info|pageprops",
+        prop: "extracts|info|description",
         exintro: "1",
         explaintext: "1",
         inprop: "url"
@@ -802,50 +842,15 @@
       const pages = data?.query?.pages ? Object.values(data.query.pages) : [];
 
       const usablePages = pages.filter(page => page.title && page.extract);
-      const qids = usablePages
-        .map(page => page.pageprops?.wikibase_item)
-        .filter(Boolean);
 
-      const descriptions = {};
-
-      if (qids.length) {
-        try {
-          const wdParams = new URLSearchParams({
-            origin: "*",
-            action: "wbgetentities",
-            format: "json",
-            ids: qids.join("|"),
-            props: "descriptions",
-            languages: "ja|en",
-            languagefallback: "1"
-          });
-
-          const wdResponse = await fetch(`https://www.wikidata.org/w/api.php?${wdParams.toString()}`);
-          if (wdResponse.ok) {
-            const wdData = await wdResponse.json();
-            Object.entries(wdData.entities || {}).forEach(([qid, entity]) => {
-              descriptions[qid] =
-                entity.descriptions?.ja?.value ||
-                entity.descriptions?.en?.value ||
-                "";
-            });
-          }
-        } catch (error) {
-          console.warn("Wikidataの短い説明を取得できませんでした。", error);
-        }
-      }
-
-      return usablePages.map(page => {
-        const qid = page.pageprops?.wikibase_item;
-        return {
-          pageid: page.pageid,
-          title: page.title,
-          extract: page.extract,
-          summary: makeDefinitionSummary(page.title, descriptions[qid] || "", page.extract),
-          detail: makeDetail(page.extract),
-          url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
-        };
-      });
+      return usablePages.map(page => ({
+        pageid: page.pageid,
+        title: page.title,
+        extract: page.extract,
+        summary: makeDefinitionSummary(page.title, page.description || "", page.extract),
+        detail: makeDetail(page.extract),
+        url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
+      }));
     }
 
     async function fetchFullArticle(item) {
