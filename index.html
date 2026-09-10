@@ -821,6 +821,16 @@
   <script>
     const PAGE_SIZE = 20;
     const API = "https://ja.wikipedia.org/w/api.php";
+
+    async function fetchWithTimeout(url, timeoutMs = 7000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
     const timelineEl = document.getElementById("timeline");
     const loadMoreBtn = document.getElementById("loadMoreBtn");
     const loadMoreWrap = document.getElementById("loadMoreWrap");
@@ -855,6 +865,7 @@
     let searchMode = "auto"; // auto / genre / exact
     let searchBuffer = [];
     let searchExhausted = false;
+    let searchStage = 0;
 
     function applyTheme(theme) {
       const safeTheme = theme === "dark" ? "dark" : "light";
@@ -1043,7 +1054,12 @@
         titles: query,
         redirects: "1"
       });
-      const response = await fetch(`${API}?${params.toString()}`);
+      let response;
+      try {
+        response = await fetchWithTimeout(`${API}?${params.toString()}`, 5000);
+      } catch {
+        return false;
+      }
       if (!response.ok) return false;
       const data = await response.json();
       const pages = data?.query?.pages ? Object.values(data.query.pages) : [];
@@ -1062,9 +1078,9 @@
       // 「書籍」のように、単語検索では目的の作品一覧になりにくいジャンルは
       // Wikipedia記事で使われているテンプレートを利用して絞り込む。
       const specialQueries = {
-        "本": 'hastemplate:"基礎情報 書籍"',
-        "書籍": 'hastemplate:"基礎情報 書籍"',
-        "小説": 'hastemplate:"基礎情報 書籍" 小説',
+        "本": '(hastemplate:"基礎情報 書籍" OR incategory:"小説" OR incategory:"文学作品")',
+        "書籍": '(hastemplate:"基礎情報 書籍" OR incategory:"小説" OR incategory:"文学作品")',
+        "小説": '(hastemplate:"基礎情報 書籍" OR incategory:"小説")',
         "駅": 'hastemplate:"駅情報"',
         "鉄道駅": 'hastemplate:"駅情報"'
       };
@@ -1109,23 +1125,49 @@
       return `(${categoryQuery}) OR "${q}"`;
     }
 
+    function getSearchQueries(query) {
+      const q = query.trim().replace(/"/g, "");
+
+      // 1つの検索式だけで候補が尽きたと判断しない。
+      // ジャンル検索 → 通常検索 → タイトル検索の順に広げる。
+      if (searchMode === "exact") {
+        return [
+          `intitle:"${q}"`,
+          `"${q}"`,
+          q
+        ];
+      }
+
+      return [
+        buildGenreSearchQuery(q),
+        q,
+        `intitle:"${q}"`
+      ];
+    }
+
     async function fetchGenreArticles(query, count = PAGE_SIZE) {
       const collected = [];
 
-      // 以前の取得で余った候補を先に使う。
       while (searchBuffer.length && collected.length < count) {
         collected.push(searchBuffer.shift());
       }
 
-      let safety = 0;
+      const queries = getSearchQueries(query);
+      let requestsThisClick = 0;
 
-      // Wikipedia検索の続きを順番にたどる。
-      // 1回で最大50件取得し、20件を超えた分は次回用に保存する。
-      while (collected.length < count && !searchExhausted && safety < 8) {
-        const effectiveQuery = searchMode === "exact"
-          ? `intitle:"${query.replace(/"/g, "")}"`
-          : buildGenreSearchQuery(query);
+      // 1回のクリックで検索APIは最大3回まで。
+      // 20件揃わなくても途中結果を返し、画面を固めない。
+      while (
+        collected.length < count &&
+        !searchExhausted &&
+        requestsThisClick < 3
+      ) {
+        if (searchStage >= queries.length) {
+          searchExhausted = true;
+          break;
+        }
 
+        const effectiveQuery = queries[searchStage];
         const searchParams = new URLSearchParams({
           origin: "*",
           action: "query",
@@ -1133,31 +1175,37 @@
           list: "search",
           srsearch: effectiveQuery,
           srnamespace: "0",
-          srlimit: "50",
+          srlimit: "30",
           sroffset: String(searchOffset),
           srprop: "",
           utf8: "1"
         });
 
-        const searchResponse = await fetch(`${API}?${searchParams.toString()}`);
-        if (!searchResponse.ok) throw new Error("Wikipedia検索に失敗しました。");
-
-        const searchData = await searchResponse.json();
-        const results = searchData?.query?.search || [];
-
-        if (!results.length) {
-          searchExhausted = true;
-          break;
+        let searchData;
+        try {
+          const response = await fetchWithTimeout(
+            `${API}?${searchParams.toString()}`,
+            7000
+          );
+          if (!response.ok) throw new Error("Wikipedia検索に失敗しました。");
+          searchData = await response.json();
+        } catch (error) {
+          console.warn("検索をスキップ:", effectiveQuery, error);
+          // この検索式が不調でも次の検索式へ進む。
+          searchStage++;
+          searchOffset = 0;
+          requestsThisClick++;
+          continue;
         }
 
-        // MediaWikiが返した「次の位置」を優先して使う。
-        // 無い場合のみ、今回取得した件数分だけ進める。
-        const nextOffset = searchData?.continue?.sroffset;
-        if (Number.isFinite(nextOffset)) {
-          searchOffset = nextOffset;
-        } else {
-          searchOffset += results.length;
-          searchExhausted = true;
+        const results = searchData?.query?.search || [];
+
+        // この検索式で候補が無ければ、別の検索方法に切り替える。
+        if (!results.length) {
+          searchStage++;
+          searchOffset = 0;
+          requestsThisClick++;
+          continue;
         }
 
         const ids = results.map(result => result.pageid).join("|");
@@ -1172,10 +1220,20 @@
           inprop: "url"
         });
 
-        const pageResponse = await fetch(`${API}?${pageParams.toString()}`);
-        if (!pageResponse.ok) throw new Error("Wikipedia記事の取得に失敗しました。");
+        let pageData;
+        try {
+          const response = await fetchWithTimeout(
+            `${API}?${pageParams.toString()}`,
+            7000
+          );
+          if (!response.ok) throw new Error("Wikipedia記事の取得に失敗しました。");
+          pageData = await response.json();
+        } catch (error) {
+          console.warn("記事取得をスキップ:", error);
+          requestsThisClick++;
+          break;
+        }
 
-        const pageData = await pageResponse.json();
         const pages = pageData?.query?.pages ? Object.values(pageData.query.pages) : [];
         const order = new Map(results.map((result, index) => [result.pageid, index]));
 
@@ -1190,7 +1248,6 @@
             detail: makeDetail(page.extract),
             url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
           }))
-          // 要約が短くても候補自体は捨てない。
           .filter(item => item.summary && item.summary.length >= 4);
 
         const knownIds = new Set([
@@ -1205,7 +1262,21 @@
         collected.push(...fresh.slice(0, needed));
         searchBuffer.push(...fresh.slice(needed));
 
-        safety++;
+        const nextOffset = searchData?.continue?.sroffset;
+
+        if (Number.isFinite(nextOffset)) {
+          searchOffset = nextOffset;
+        } else {
+          // この検索方法の末尾まで来たら、次の検索方法へ。
+          searchStage++;
+          searchOffset = 0;
+        }
+
+        requestsThisClick++;
+      }
+
+      if (searchStage >= queries.length && searchBuffer.length === 0) {
+        searchExhausted = true;
       }
 
       return collected;
@@ -1405,6 +1476,9 @@
         if (currentGenre && batch.length === 0 && searchExhausted) {
           loadMoreBtn.disabled = true;
           loadMoreBtn.textContent = "これ以上の候補はありません";
+        } else if (currentGenre && batch.length === 0) {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = "別の候補をさらに探す";
         }
 
         if (currentGenre && items.length === 0) {
@@ -1501,6 +1575,7 @@
       searchOffset = 0;
       searchBuffer = [];
       searchExhausted = false;
+      searchStage = 0;
       searchMode = await resolveSearchMode(query);
       items = [];
       currentTab = "timeline";
@@ -1520,6 +1595,7 @@
       searchOffset = 0;
       searchBuffer = [];
       searchExhausted = false;
+      searchStage = 0;
       searchMode = "auto";
       items = [];
       genreInput.value = "";
