@@ -1067,6 +1067,7 @@
     }
 
     async function resolveSearchMode(query) {
+      if (query.trim() === "本のタイトル") return "book_titles";
       if (looksLikeGenre(query)) return "genre";
       const exact = await pageExistsExactly(query);
       return exact ? "exact" : "genre";
@@ -1130,6 +1131,14 @@
 
       // 1つの検索式だけで候補が尽きたと判断しない。
       // ジャンル検索 → 通常検索 → タイトル検索の順に広げる。
+      if (searchMode === "book_titles") {
+        return [
+          'hastemplate:"基礎情報 書籍"',
+          'incategory:"小説"',
+          'incategory:"文学作品"'
+        ];
+      }
+
       if (searchMode === "exact") {
         return [
           `intitle:"${q}"`,
@@ -1246,9 +1255,19 @@
             extract: page.extract,
             summary: makeDefinitionSummary(page.title, page.description || "", page.extract),
             detail: makeDetail(page.extract),
+            description: page.description || "",
             url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
           }))
-          .filter(item => item.summary && item.summary.length >= 4);
+          .filter(item => item.summary && item.summary.length >= 4)
+          .filter(item => {
+            if (searchMode !== "book_titles") return true;
+
+            const text = `${item.description} ${item.extract}`.slice(0, 900);
+            const positive = /(小説|書籍|著書|文学作品|物語|作品|刊行|出版|長編|短編|児童文学|絵本|随筆|エッセイ|ノンフィクション)/;
+            const negative = /(小説家|作家|著作家|出版社|出版者|文学者|評論家|編集者|図書館|書店|賞$)/;
+
+            return positive.test(text) && !negative.test(item.description);
+          });
 
         const knownIds = new Set([
           ...items.map(item => item.pageid),
@@ -1580,7 +1599,12 @@
       items = [];
       currentTab = "timeline";
       tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "timeline"));
-      genreLabel.textContent = searchMode === "genre" ? `${query}（ジャンル）` : query;
+      genreLabel.textContent =
+        searchMode === "book_titles"
+          ? "本のタイトル"
+          : searchMode === "genre"
+            ? `${query}（ジャンル）`
+            : query;
       genreState.classList.add("show");
       setSearchOpen(false);
       genreSubmit.disabled = true;
