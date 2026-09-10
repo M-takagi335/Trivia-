@@ -853,6 +853,8 @@
     let currentGenre = "";
     let searchOffset = 0;
     let searchMode = "auto"; // auto / genre / exact
+    let searchBuffer = [];
+    let searchExhausted = false;
 
     function applyTheme(theme) {
       const safeTheme = theme === "dark" ? "dark" : "light";
@@ -1108,61 +1110,105 @@
     }
 
     async function fetchGenreArticles(query, count = PAGE_SIZE) {
-      const effectiveQuery = searchMode === "exact"
-        ? `intitle:"${query.replace(/"/g, "")}"`
-        : buildGenreSearchQuery(query);
+      const collected = [];
 
-      const searchParams = new URLSearchParams({
-        origin: "*",
-        action: "query",
-        format: "json",
-        list: "search",
-        srsearch: effectiveQuery,
-        srnamespace: "0",
-        srlimit: String(Math.min(50, Math.max(40, count * 2))),
-        sroffset: String(searchOffset),
-        srprop: "",
-        utf8: "1"
-      });
+      // 以前の取得で余った候補を先に使う。
+      while (searchBuffer.length && collected.length < count) {
+        collected.push(searchBuffer.shift());
+      }
 
-      const searchResponse = await fetch(`${API}?${searchParams.toString()}`);
-      if (!searchResponse.ok) throw new Error("Wikipedia検索に失敗しました。");
+      let safety = 0;
 
-      const searchData = await searchResponse.json();
-      const results = searchData?.query?.search || [];
-      searchOffset += results.length;
-      if (!results.length) return [];
+      // Wikipedia検索の続きを順番にたどる。
+      // 1回で最大50件取得し、20件を超えた分は次回用に保存する。
+      while (collected.length < count && !searchExhausted && safety < 8) {
+        const effectiveQuery = searchMode === "exact"
+          ? `intitle:"${query.replace(/"/g, "")}"`
+          : buildGenreSearchQuery(query);
 
-      const ids = results.map(result => result.pageid).join("|");
-      const pageParams = new URLSearchParams({
-        origin: "*",
-        action: "query",
-        format: "json",
-        pageids: ids,
-        prop: "extracts|info|description",
-        exintro: "1",
-        explaintext: "1",
-        inprop: "url"
-      });
+        const searchParams = new URLSearchParams({
+          origin: "*",
+          action: "query",
+          format: "json",
+          list: "search",
+          srsearch: effectiveQuery,
+          srnamespace: "0",
+          srlimit: "50",
+          sroffset: String(searchOffset),
+          srprop: "",
+          utf8: "1"
+        });
 
-      const pageResponse = await fetch(`${API}?${pageParams.toString()}`);
-      if (!pageResponse.ok) throw new Error("Wikipedia記事の取得に失敗しました。");
+        const searchResponse = await fetch(`${API}?${searchParams.toString()}`);
+        if (!searchResponse.ok) throw new Error("Wikipedia検索に失敗しました。");
 
-      const pageData = await pageResponse.json();
-      const pages = pageData?.query?.pages ? Object.values(pageData.query.pages) : [];
-      const order = new Map(results.map((result, index) => [result.pageid, index]));
+        const searchData = await searchResponse.json();
+        const results = searchData?.query?.search || [];
 
-      return pages
-        .filter(page => page.title && page.extract)
-        .sort((a, b) => (order.get(a.pageid) ?? 999) - (order.get(b.pageid) ?? 999))
-        .map(page => ({
-          pageid: page.pageid,
-          title: page.title,
-          extract: page.extract,
-          summary: makeDefinitionSummary(page.title, page.description || "", page.extract),
-          detail: makeDetail(page.extract),
-          url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
-        }));
+        if (!results.length) {
+          searchExhausted = true;
+          break;
+        }
+
+        // MediaWikiが返した「次の位置」を優先して使う。
+        // 無い場合のみ、今回取得した件数分だけ進める。
+        const nextOffset = searchData?.continue?.sroffset;
+        if (Number.isFinite(nextOffset)) {
+          searchOffset = nextOffset;
+        } else {
+          searchOffset += results.length;
+          searchExhausted = true;
+        }
+
+        const ids = results.map(result => result.pageid).join("|");
+        const pageParams = new URLSearchParams({
+          origin: "*",
+          action: "query",
+          format: "json",
+          pageids: ids,
+          prop: "extracts|info|description",
+          exintro: "1",
+          explaintext: "1",
+          inprop: "url"
+        });
+
+        const pageResponse = await fetch(`${API}?${pageParams.toString()}`);
+        if (!pageResponse.ok) throw new Error("Wikipedia記事の取得に失敗しました。");
+
+        const pageData = await pageResponse.json();
+        const pages = pageData?.query?.pages ? Object.values(pageData.query.pages) : [];
+        const order = new Map(results.map((result, index) => [result.pageid, index]));
+
+        const mapped = pages
+          .filter(page => page.title && page.extract)
+          .sort((a, b) => (order.get(a.pageid) ?? 999) - (order.get(b.pageid) ?? 999))
+          .map(page => ({
+            pageid: page.pageid,
+            title: page.title,
+            extract: page.extract,
+            summary: makeDefinitionSummary(page.title, page.description || "", page.extract),
+            detail: makeDetail(page.extract),
+            url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
+          }))
+          // 要約が短くても候補自体は捨てない。
+          .filter(item => item.summary && item.summary.length >= 4);
+
+        const knownIds = new Set([
+          ...items.map(item => item.pageid),
+          ...collected.map(item => item.pageid),
+          ...searchBuffer.map(item => item.pageid)
+        ]);
+
+        const fresh = mapped.filter(item => !knownIds.has(item.pageid));
+        const needed = count - collected.length;
+
+        collected.push(...fresh.slice(0, needed));
+        searchBuffer.push(...fresh.slice(needed));
+
+        safety++;
+      }
+
+      return collected;
     }
 
     async function fetchRandomArticles(count = PAGE_SIZE) {
@@ -1335,27 +1381,31 @@
 
       try {
         let batch = [];
-        let attempts = 0;
 
-        // 短すぎる記事が混ざる場合に備え、必要数まで追加取得する。
-        while (batch.length < PAGE_SIZE && attempts < 4) {
-          const fetched = currentGenre
-            ? await fetchGenreArticles(currentGenre, PAGE_SIZE)
-            : await fetchRandomArticles(PAGE_SIZE);
-          const existingIds = new Set([...items, ...batch].map(x => x.pageid));
-
-          batch.push(
-            ...fetched.filter(item =>
-              item.summary.length >= 18 &&
-              !existingIds.has(item.pageid)
-            )
-          );
-
-          attempts++;
+        if (currentGenre) {
+          batch = await fetchGenreArticles(currentGenre, PAGE_SIZE);
+        } else {
+          let attempts = 0;
+          while (batch.length < PAGE_SIZE && attempts < 4) {
+            const fetched = await fetchRandomArticles(PAGE_SIZE);
+            const existingIds = new Set([...items, ...batch].map(x => x.pageid));
+            batch.push(
+              ...fetched.filter(item =>
+                item.summary.length >= 18 &&
+                !existingIds.has(item.pageid)
+              )
+            );
+            attempts++;
+          }
         }
 
         items.push(...batch.slice(0, PAGE_SIZE));
         render();
+
+        if (currentGenre && batch.length === 0 && searchExhausted) {
+          loadMoreBtn.disabled = true;
+          loadMoreBtn.textContent = "これ以上の候補はありません";
+        }
 
         if (currentGenre && items.length === 0) {
           timelineEl.innerHTML = `<div class="empty-note">「${escapeHtml(currentGenre)}」の候補を取得できませんでした。<br>もう一度読み込むか、別の言葉を試してください。</div>`;
@@ -1367,8 +1417,10 @@
         }
       } finally {
         loading = false;
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.textContent = "さらに20件読み込む";
+        if (!(currentGenre && searchExhausted && searchBuffer.length === 0)) {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = "さらに20件読み込む";
+        }
       }
     }
 
@@ -1447,6 +1499,8 @@
 
       currentGenre = query;
       searchOffset = 0;
+      searchBuffer = [];
+      searchExhausted = false;
       searchMode = await resolveSearchMode(query);
       items = [];
       currentTab = "timeline";
@@ -1464,6 +1518,8 @@
       if (loading) return;
       currentGenre = "";
       searchOffset = 0;
+      searchBuffer = [];
+      searchExhausted = false;
       searchMode = "auto";
       items = [];
       genreInput.value = "";
