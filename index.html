@@ -117,6 +117,13 @@
       gap: 14px;
     }
 
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
     h1 {
       margin: 0;
       font-size: 22px;
@@ -565,6 +572,150 @@
 
     .theme-option.active .check { opacity: 1; }
 
+    .search-shell {
+      margin-top: 0;
+    }
+
+    .search-toggle {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      background: var(--soft-bg);
+      color: var(--text);
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+
+    .search-toggle:hover {
+      background: var(--accent-soft);
+      border-color: rgba(109,93,252,.28);
+    }
+
+    .search-toggle:active {
+      transform: scale(.96);
+    }
+
+    .search-toggle-icon {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .search-toggle-icon::before {
+      content: "";
+      display: block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      transform: translate(1px, 1px);
+    }
+
+    .search-toggle-icon::after {
+      content: "";
+      display: block;
+      width: 7px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+      transform: translate(11px, 0px) rotate(45deg);
+      transform-origin: left center;
+    }
+
+    .search-toggle-label,
+    .search-toggle-arrow {
+      display: none;
+    }
+
+    .search-panel {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      margin-top: 0;
+      transition: grid-template-rows .2s ease, opacity .16s ease, margin-top .2s ease;
+    }
+
+    .search-panel.open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+      margin-top: 10px;
+    }
+
+    .search-panel-inner {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .genre-search {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 9px;
+    }
+
+    .genre-input {
+      width: 100%;
+      min-width: 0;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0 14px;
+      outline: none;
+      background: var(--card-strong);
+      color: var(--text);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .genre-input::placeholder { color: var(--muted); }
+
+    .genre-input:focus {
+      border-color: rgba(109,93,252,.55);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .genre-submit {
+      height: 44px;
+      border: 0;
+      border-radius: 14px;
+      padding: 0 17px;
+      cursor: pointer;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      color: white;
+      box-shadow: 0 10px 24px rgba(79,70,229,.22);
+    }
+
+    .genre-state {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 9px;
+      padding: 8px 10px 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--soft-bg);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .genre-state.show { display: flex; }
+
+    .genre-state strong { color: var(--text); }
+
+    .genre-clear {
+      border: 0;
+      background: transparent;
+      color: var(--accent-label);
+      cursor: pointer;
+      font-weight: 800;
+      padding: 3px 5px;
+    }
+
     @media (max-width: 640px) {
       .app { border: 0; }
       .topbar { padding-inline: 15px; }
@@ -588,20 +739,44 @@
           <h1>Trivia Timeline</h1>
           <p class="subtitle">Wikipediaから、知らない言葉に出会う。</p>
         </div>
-        <div class="menu-wrap">
-          <button id="menuButton" class="menu-button" type="button" aria-label="メニューを開く" aria-expanded="false">
-            <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
+        <div class="topbar-actions">
+          <button id="searchToggle" class="search-toggle" type="button"
+            aria-label="検索を開く" aria-expanded="false" aria-controls="searchPanel">
+            <span class="search-toggle-icon" aria-hidden="true"></span>
           </button>
-          <div id="menuPanel" class="menu-panel" aria-hidden="true">
-            <div class="menu-title">表示テーマ</div>
-            <button class="theme-option" type="button" data-theme-option="light">
-              <span>☀️ ライト</span><span class="check">✓</span>
+
+          <div class="menu-wrap">
+            <button id="menuButton" class="menu-button" type="button" aria-label="メニューを開く" aria-expanded="false">
+              <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
-            <button class="theme-option" type="button" data-theme-option="dark">
-              <span>🌙 ダーク</span><span class="check">✓</span>
-            </button>
+            <div id="menuPanel" class="menu-panel" aria-hidden="true">
+              <div class="menu-title">表示テーマ</div>
+              <button class="theme-option" type="button" data-theme-option="light">
+                <span>☀️ ライト</span><span class="check">✓</span>
+              </button>
+              <button class="theme-option" type="button" data-theme-option="dark">
+                <span>🌙 ダーク</span><span class="check">✓</span>
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div class="search-shell">
+        <div id="searchPanel" class="search-panel" aria-hidden="true">
+          <div class="search-panel-inner">
+            <form id="genreForm" class="genre-search" role="search">
+              <input id="genreInput" class="genre-input" type="search" autocomplete="off"
+                placeholder="例：書籍、駅、哲学者、ノルウェイの森" aria-label="ジャンルまたはタイトル" />
+              <button id="genreSubmit" class="genre-submit" type="submit">決定</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div id="genreState" class="genre-state" aria-live="polite">
+        <span>表示中：<strong id="genreLabel"></strong></span>
+        <button id="genreClear" class="genre-clear" type="button">解除</button>
       </div>
 
       <div class="tabs" aria-label="表示切り替え">
@@ -653,6 +828,14 @@
     const menuButton = document.getElementById("menuButton");
     const menuPanel = document.getElementById("menuPanel");
     const themeOptions = [...document.querySelectorAll("[data-theme-option]")];
+    const searchToggle = document.getElementById("searchToggle");
+    const searchPanel = document.getElementById("searchPanel");
+    const genreForm = document.getElementById("genreForm");
+    const genreInput = document.getElementById("genreInput");
+    const genreSubmit = document.getElementById("genreSubmit");
+    const genreState = document.getElementById("genreState");
+    const genreLabel = document.getElementById("genreLabel");
+    const genreClear = document.getElementById("genreClear");
 
     const modal = document.getElementById("modal");
     const modalTitle = document.getElementById("modalTitle");
@@ -667,6 +850,9 @@
     let currentTab = "timeline";
     let activeItem = null;
     let loading = false;
+    let currentGenre = "";
+    let searchOffset = 0;
+    let searchMode = "auto"; // auto / genre / exact
 
     function applyTheme(theme) {
       const safeTheme = theme === "dark" ? "dark" : "light";
@@ -703,6 +889,18 @@
     });
 
     applyTheme(localStorage.getItem("trivia-theme") || "light");
+
+    function setSearchOpen(open) {
+      searchPanel.classList.toggle("open", open);
+      searchPanel.setAttribute("aria-hidden", String(!open));
+      searchToggle.setAttribute("aria-expanded", String(open));
+      searchToggle.setAttribute("aria-label", open ? "検索を閉じる" : "検索を開く");
+      if (open) requestAnimationFrame(() => genreInput.focus());
+    }
+
+    searchToggle.addEventListener("click", () => {
+      setSearchOpen(searchToggle.getAttribute("aria-expanded") !== "true");
+    });
 
     function getFavorites() {
       try {
@@ -817,6 +1015,154 @@
       const text = cleanText(extract);
       if (!text) return "本文を取得できませんでした。";
       return text.length > 1800 ? text.slice(0, 1800) + "…" : text;
+    }
+
+    const GENERIC_GENRE_WORDS = new Set([
+      "本", "書籍", "小説", "文学", "漫画", "マンガ", "絵本", "雑誌",
+      "駅", "鉄道駅", "路線", "鉄道", "空港", "港",
+      "人物", "人名", "作家", "小説家", "漫画家", "俳優", "女優", "声優",
+      "歌手", "音楽家", "作曲家", "画家", "哲学者", "科学者", "数学者",
+      "映画", "映画作品", "ドラマ", "アニメ", "ゲーム", "楽曲", "アルバム",
+      "会社", "企業", "大学", "学校", "寺院", "神社", "城", "山", "川", "島",
+      "都市", "国", "料理", "食べ物", "動物", "植物", "スポーツ"
+    ]);
+
+    function looksLikeGenre(query) {
+      const q = query.trim();
+      if (GENERIC_GENRE_WORDS.has(q)) return true;
+      return /(者|家|駅|作品|映画|小説|書籍|漫画|大学|企業|会社|料理|動物|植物|スポーツ)$/.test(q) && q.length <= 12;
+    }
+
+    async function pageExistsExactly(query) {
+      const params = new URLSearchParams({
+        origin: "*",
+        action: "query",
+        format: "json",
+        titles: query,
+        redirects: "1"
+      });
+      const response = await fetch(`${API}?${params.toString()}`);
+      if (!response.ok) return false;
+      const data = await response.json();
+      const pages = data?.query?.pages ? Object.values(data.query.pages) : [];
+      return pages.some(page => !page.missing && page.ns === 0);
+    }
+
+    async function resolveSearchMode(query) {
+      if (looksLikeGenre(query)) return "genre";
+      const exact = await pageExistsExactly(query);
+      return exact ? "exact" : "genre";
+    }
+
+    function buildGenreSearchQuery(query) {
+      const q = query.trim().replace(/"/g, "");
+
+      // 「書籍」のように、単語検索では目的の作品一覧になりにくいジャンルは
+      // Wikipedia記事で使われているテンプレートを利用して絞り込む。
+      const specialQueries = {
+        "本": 'hastemplate:"基礎情報 書籍"',
+        "書籍": 'hastemplate:"基礎情報 書籍"',
+        "小説": 'hastemplate:"基礎情報 書籍" 小説',
+        "駅": 'hastemplate:"駅情報"',
+        "鉄道駅": 'hastemplate:"駅情報"'
+      };
+
+      if (specialQueries[q]) {
+        return specialQueries[q];
+      }
+
+      const categoryMap = {
+        "文学": ["文学作品", "文学"],
+        "漫画": ["漫画作品", "漫画"],
+        "マンガ": ["漫画作品", "漫画"],
+        "絵本": ["絵本"],
+        "雑誌": ["雑誌"],
+        "鉄道": ["鉄道"],
+        "人物": ["人物"],
+        "人名": ["人物"],
+        "作家": ["作家"],
+        "小説家": ["小説家"],
+        "漫画家": ["漫画家"],
+        "俳優": ["俳優"],
+        "女優": ["女優"],
+        "声優": ["声優"],
+        "歌手": ["歌手"],
+        "音楽家": ["音楽家"],
+        "作曲家": ["作曲家"],
+        "画家": ["画家"],
+        "哲学者": ["哲学者"],
+        "科学者": ["科学者"],
+        "数学者": ["数学者"],
+        "映画": ["映画作品", "映画"],
+        "映画作品": ["映画作品"],
+        "アニメ": ["アニメ作品"],
+        "ゲーム": ["コンピュータゲーム"]
+      };
+
+      const categories = categoryMap[q] || [q];
+      const categoryQuery = categories
+        .map(category => `incategory:"${category}"`)
+        .join(" OR ");
+
+      return `(${categoryQuery}) OR "${q}"`;
+    }
+
+    async function fetchGenreArticles(query, count = PAGE_SIZE) {
+      const effectiveQuery = searchMode === "exact"
+        ? `intitle:"${query.replace(/"/g, "")}"`
+        : buildGenreSearchQuery(query);
+
+      const searchParams = new URLSearchParams({
+        origin: "*",
+        action: "query",
+        format: "json",
+        list: "search",
+        srsearch: effectiveQuery,
+        srnamespace: "0",
+        srlimit: String(Math.min(50, Math.max(40, count * 2))),
+        sroffset: String(searchOffset),
+        srprop: "",
+        utf8: "1"
+      });
+
+      const searchResponse = await fetch(`${API}?${searchParams.toString()}`);
+      if (!searchResponse.ok) throw new Error("Wikipedia検索に失敗しました。");
+
+      const searchData = await searchResponse.json();
+      const results = searchData?.query?.search || [];
+      searchOffset += results.length;
+      if (!results.length) return [];
+
+      const ids = results.map(result => result.pageid).join("|");
+      const pageParams = new URLSearchParams({
+        origin: "*",
+        action: "query",
+        format: "json",
+        pageids: ids,
+        prop: "extracts|info|description",
+        exintro: "1",
+        explaintext: "1",
+        inprop: "url"
+      });
+
+      const pageResponse = await fetch(`${API}?${pageParams.toString()}`);
+      if (!pageResponse.ok) throw new Error("Wikipedia記事の取得に失敗しました。");
+
+      const pageData = await pageResponse.json();
+      const pages = pageData?.query?.pages ? Object.values(pageData.query.pages) : [];
+      const order = new Map(results.map((result, index) => [result.pageid, index]));
+
+      return pages
+        .filter(page => page.title && page.extract)
+        .sort((a, b) => (order.get(a.pageid) ?? 999) - (order.get(b.pageid) ?? 999))
+        .map(page => ({
+          pageid: page.pageid,
+          title: page.title,
+          extract: page.extract,
+          summary: makeDefinitionSummary(page.title, page.description || "", page.extract),
+          detail: makeDetail(page.extract),
+          url: page.fullurl || `https://ja.wikipedia.org/?curid=${page.pageid}`
+        }));
     }
 
     async function fetchRandomArticles(count = PAGE_SIZE) {
@@ -936,6 +1282,12 @@
       return article;
     }
 
+    function escapeHtml(value = "") {
+      return value.replace(/[&<>'"]/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+      }[char]));
+    }
+
     function render() {
       timelineEl.innerHTML = "";
 
@@ -987,7 +1339,9 @@
 
         // 短すぎる記事が混ざる場合に備え、必要数まで追加取得する。
         while (batch.length < PAGE_SIZE && attempts < 4) {
-          const fetched = await fetchRandomArticles(PAGE_SIZE);
+          const fetched = currentGenre
+            ? await fetchGenreArticles(currentGenre, PAGE_SIZE)
+            : await fetchRandomArticles(PAGE_SIZE);
           const existingIds = new Set([...items, ...batch].map(x => x.pageid));
 
           batch.push(
@@ -1002,6 +1356,10 @@
 
         items.push(...batch.slice(0, PAGE_SIZE));
         render();
+
+        if (currentGenre && items.length === 0) {
+          timelineEl.innerHTML = `<div class="empty-note">「${escapeHtml(currentGenre)}」の候補を取得できませんでした。<br>もう一度読み込むか、別の言葉を試してください。</div>`;
+        }
       } catch (error) {
         console.error(error);
         if (items.length === 0) {
@@ -1080,6 +1438,40 @@
         tabs.forEach(t => t.classList.toggle("active", t === tab));
         render();
       });
+    });
+
+    genreForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const query = genreInput.value.trim();
+      if (!query || loading) return;
+
+      currentGenre = query;
+      searchOffset = 0;
+      searchMode = await resolveSearchMode(query);
+      items = [];
+      currentTab = "timeline";
+      tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "timeline"));
+      genreLabel.textContent = searchMode === "genre" ? `${query}（ジャンル）` : query;
+      genreState.classList.add("show");
+      setSearchOpen(false);
+      genreSubmit.disabled = true;
+
+      await loadMore(true);
+      genreSubmit.disabled = false;
+    });
+
+    genreClear.addEventListener("click", async () => {
+      if (loading) return;
+      currentGenre = "";
+      searchOffset = 0;
+      searchMode = "auto";
+      items = [];
+      genreInput.value = "";
+      genreState.classList.remove("show");
+      setSearchOpen(false);
+      currentTab = "timeline";
+      tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tab === "timeline"));
+      await loadMore(true);
     });
 
     loadMoreBtn.addEventListener("click", () => loadMore(false));
